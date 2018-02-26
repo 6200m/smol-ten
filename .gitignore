@@ -1,4 +1,4 @@
-csdata.LZ.compressed
+csdata.LZ.*.comp
 csdata.LZ.decmp
 csdata.LZ.container
 wc24pubk.mod

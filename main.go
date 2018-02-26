@@ -1,4 +1,4 @@
-package smol_ten
+package main
 
 import (
 	"flag"
@@ -7,13 +7,16 @@ import (
 	"log"
 )
 
+const MAGICBYTE = 0x10
 var extractedFilePath string
 var savePath string
+var compress bool
 
 // BUG(spotlightishere): Does not handle compression.
 func main() {
-	flag.StringVar(&extractedFilePath, "extract", "", "Path to file to decompress.")
-	flag.StringVar(&savePath, "output", "", "Path to save extracted file")
+	flag.StringVar(&extractedFilePath, "extract", "", "Path to file to work with.")
+	flag.StringVar(&savePath, "output", "", "Path to save operated upon file")
+	flag.BoolVar(&compress, "compress", true, "If true, compresses the file. If false, decompresses.")
 	flag.Parse()
 
 	log.Print("Reading " + extractedFilePath + "...")
@@ -31,10 +34,20 @@ func main() {
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
-	decrypted, err := Extract(fileToExtract, pubkFile)
-	if err != nil {
-		panic(err)
+
+	if compress {
+		result, compressionErr := Compress(fileToExtract)
+		if compressionErr != nil {
+			panic(compressionErr)
+		}
+		ioutil.WriteFile(savePath, result, os.ModePerm)
+	} else {
+		result, compressionErr := Decompress(fileToExtract)
+		if compressionErr != nil {
+			panic(compressionErr)
+		}
+		ioutil.WriteFile(savePath, result, os.ModePerm)
 	}
-	ioutil.WriteFile(savePath, decrypted, os.ModePerm)
+
 	log.Print("Done! Saved to " + savePath)
 }

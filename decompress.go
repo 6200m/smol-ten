@@ -2,77 +2,61 @@ package smol
 
 import (
 	"bytes"
-	"errors"
+	"log"
 )
 
 var decompressed []byte
 var compressed *bytes.Buffer
 
-// Decompress takes input, reads the length and attempts
-// its best to decompress under LZ10/11/77/all those fun things.
-// See also: https://github.com/Barubary/dsdecmp/blob/master/CSharp/DSDecmp/Formats/Nitro/LZ11.cs#L85-L118
+// Decompress takes input, reads the length and attempts ts best to decompress under LZ10.
+// See also: https://github.com/profi200/splashtool/blob/7bb5342839866bfecb16537cc8caf1d966dcd545/tex3ds/source/lzss.c
 func Decompress(input []byte, decompressedLength int) ([]byte, error) {
 	compressed = bytes.NewBuffer(input)
-	println(decompressedLength)
+	var decompressed []byte
+	println("Expected length:", decompressedLength)
 
-	for decompressedLength > len(decompressed) {
+	var flags byte = 0x00
+	var mask byte = 0x00
+
+	for decompressedLength > 0 {
 		byteToHandle := nextByte()
 
-		// If the "flag" byte is 00, we can just do a shortcut
-		// and write out the next 8 bytes.
-		//if byteToHandle == 0x00 {
-		//	println("Skipping byte")
-		//	addToDecompressed(compressed.Next(8))
-		//} else if byteToHandle == 0x01 {
-			// We'll go bit by bit to determine the next action.
-			for _, flagBit := range getBits(byteToHandle) {
-				//println("Currently at bit", loc)
-				//fmt.Printf("Hi from 0x%x\n", byteToHandle)
+		// If there's no mask, reset.
+		if mask == 0x00 {
+			flags = byteToHandle
+			mask = 0x80
+		}
 
-				if flagBit == 0 {
-					// We just write this referenced byte, no compression applied.
-					nextByte := compressed.Next(1)
-					//fmt.Printf("0x%d\n", nextByte)
-					addToDecompressed(nextByte)
-				} else if flagBit == 1 {
-					workingByte := nextByte()
-					indicator := workingByte >> 4
-					var count int
+		if (flags & mask) != 0x00 {
+			// Seems like we've a compressed block
+			length := uint8(byteToHandle) & 0xF0
+			length = length >> 4
+			length += 3
 
-					// TODO: better document
-					if indicator == 0 {
-						count = int(workingByte << 4)
+			disp := uint8(nextByte()) & 0x0F
+			disp = disp << 8 | uint8(nextByte())
 
-						workingByte = nextByte()
-						count += int(workingByte >> 4)
-						count += 0x11
-					} else if indicator == 1 {
-						count = int((workingByte & 0xf) << 12)
-						workingByte = nextByte()
-						count += int(workingByte >> 4)
-						count += 0x111
-					} else {
-						count = int(workingByte >> 4)
-						count += 1
-					}
-
-					disp := ((workingByte & 0xf) << 8) + nextByte()
-					disp += 1
-
-					for count != 0 {
-						//fmt.Println("Organically sourcing from", int(disp))
-						//println(hex.EncodeToString(decompressed))
-						addToDecompressed(decompressed[len(decompressed)-int(disp):])
-						count--
-					}
-				} else {
-					return nil, errors.New("unknown flag bit")
-				}
+			if int(length) > decompressedLength {
+				length = uint8(decompressedLength)
 			}
-		//} else {
-		//	// The block flag should not be anything other than 0 or 1.
-		//	return nil, errors.New("invalid byte flag received, found " + fmt.Sprintf("0x%x", byteToHandle))
-		//}
+
+			decompressedLength -= int(length)
+
+			for length > 0 {
+				// Get location to copy byte from
+				offset := len(decompressed) - int(disp) - 1
+
+				log.Println(len(decompressed), "->", offset)
+
+				// Go back for it and add to end
+				decompressed = append(decompressed, decompressed[offset])
+			}
+		} else {
+			// Not compressed. 1:1
+			decompressed = append(decompressed, nextByte())
+			decompressedLength--
+		}
+		mask >>= 1
 	}
 
 	return decompressed, nil

@@ -1,4 +1,4 @@
-package main
+package smol
 
 func Compress(input []byte) (compressedOutput []byte, err error) {
 	// We need to go ahead and set up the header.

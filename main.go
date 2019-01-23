@@ -1,14 +1,17 @@
 package smol
 
 import (
-	"encoding/binary"
 	"flag"
 	"io/ioutil"
 	"log"
 	"os"
 )
 
-const MAGICBYTE = 0x10
+const (
+	TypeLz10 = 0x10
+	TypeLz11 = 0x11
+)
+
 var extractedFilePath string
 var savePath string
 var compress bool
@@ -37,30 +40,15 @@ func main() {
 	}
 
 	if compress {
-		result, compressionErr := Compress(fileToExtract)
+		result, compressionErr := CompressLZ10(fileToExtract)
 		if compressionErr != nil {
 			panic(compressionErr)
 		}
 		ioutil.WriteFile(savePath, result, os.ModePerm)
 	} else {
-		if fileToExtract[0] != MAGICBYTE {
-			log.Panicf("invalid magic byte")
-		}
-
-		// There's a u24 or a u32 depending on how the file is.
-		// If the next 3 bytes are 0 as an int, we can read one more byte to get the length.
-		// Otherwise the first 3 are all we need.
-		definedLength := fileToExtract[1:3]
-		uncompressedLength := toNDS24(definedLength)
-		if uncompressedLength == 0 {
-			// That means the total length is a u32 after all.
-			// We can go ahead and read it as such.
-			uncompressedLength = binary.BigEndian.Uint32(fileToExtract[1:4])
-		}
-
-		result, compressionErr := Decompress(fileToExtract, int(uncompressedLength))
-		if compressionErr != nil {
-			panic(compressionErr)
+		result, err := DecompressDetect(decompressed)
+		if err != nil {
+			panic(err)
 		}
 		ioutil.WriteFile(savePath, result, os.ModePerm)
 	}
